@@ -1,3 +1,4 @@
+## This is a open source module
 module "alb" {
   source = "terraform-aws-modules/alb/aws"
   internal = true ### It will let us know, whether the load balancer is public/private.. It is set to true tht means it is private
@@ -5,8 +6,8 @@ module "alb" {
   name    = "${var.project_name}-${var.environment}-app-alb"
   vpc_id  = data.aws_ssm_parameter.vpc_id.value
   subnets = local.private_subnet_ids
-  create_security_group = false
-  security_groups = [local.app_alb_sg_id]
+  create_security_group = false ## Given false, as we are not using the custom created.
+  security_groups = [local.app_alb_sg_id] ## Since we are not creating the custom security group, creating our own.
   enable_deletion_protection = false ## No one will delete by default if it is set to true. Since it is practice we are setting it to false.
   tags = merge(
     var.common_tags,

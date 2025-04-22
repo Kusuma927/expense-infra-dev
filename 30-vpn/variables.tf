@@ -13,13 +13,3 @@ variable "common_tags" {
         Terraform = "true"
     }
 }
-
-
-variable "zone_id" {
-    default = "Z0828358TI9NM5MO4QV9"
-    
-}
-
-variable "domain_name" {
-    default = "devopsdaws82s.online"
-}

@@ -1,5 +1,5 @@
 module "mysql_sg" {
-     source = "../terraform-aws-securitygroup"
+     source = "../../terraform-aws-securitygroup"
     #source="git::https://github.com/DAWS-82S/terraform-aws-securitygroup.git?ref=main"
     project_name = var.project_name
     environment = var.environment
@@ -10,7 +10,7 @@ module "mysql_sg" {
 }
 
 module "backend_sg" {
-    source = "../terraform-aws-securitygroup"
+    source = "../../terraform-aws-securitygroup"
     #source="git::https://github.com/DAWS-82S/terraform-aws-securitygroup.git?ref=main"
     project_name = var.project_name
     environment = var.environment
@@ -21,7 +21,7 @@ module "backend_sg" {
 }
 
 module "frontend_sg" {
-    source = "../terraform-aws-securitygroup"
+    source = "../../terraform-aws-securitygroup"
     #source="git::https://github.com/DAWS-82S/terraform-aws-securitygroup.git?ref=main"
     project_name = var.project_name
     environment = var.environment
@@ -32,7 +32,7 @@ module "frontend_sg" {
 }
 
 module "bastion_sg" {
-    source = "../terraform-aws-securitygroup"
+    source = "../../terraform-aws-securitygroup"
     #source="git::https://github.com/DAWS-82S/terraform-aws-securitygroup.git?ref=main"
     project_name = var.project_name
     environment = var.environment
@@ -41,3 +41,141 @@ module "bastion_sg" {
     vpc_id = data.aws_ssm_parameter.vpc_id.value
     common_tags = var.common_tags
 }
+
+module "app_alb_sg" {
+    source = "../../terraform-aws-securitygroup"
+    #source="git::https://github.com/DAWS-82S/terraform-aws-securitygroup.git?ref=main"
+    project_name = var.project_name
+    environment = var.environment
+    sg_name = "app_alb"
+    sg_description = "Created for backend ALB in expense dev"
+    vpc_id = data.aws_ssm_parameter.vpc_id.value
+    common_tags = var.common_tags
+}
+##VPN SG 
+##Port# (22 - To Login into servers), (443 - To establish connection to browser), (1194,943 - are for Admin roles)
+module "vpn_sg" {
+    source = "../../terraform-aws-securitygroup"
+    #source="git::https://github.com/DAWS-82S/terraform-aws-securitygroup.git?ref=main"
+    project_name = var.project_name
+    environment = var.environment
+    sg_name = "vpn"
+    sg_description = "Created for VPN Instance in expense dev"
+    vpc_id = data.aws_ssm_parameter.vpc_id.value
+    common_tags = var.common_tags
+}
+
+#App ALB Accepting traffic from Bastion Host
+resource "aws_security_group_rule" "app_alb_bastion" {
+    type = "ingress"
+    from_port = 80
+    to_port =80
+    protocol = "tcp"
+    source_security_group_id       = module.bastion_sg.sg_id //We are mapping source_security ID of Bastion to this SG.
+    security_group_id = module.app_alb_sg.sg_id  
+}
+
+## Creating bastion SG Rule
+resource "aws_security_group_rule" "bastion_public" {
+    type = "ingress"
+    from_port = 22
+    to_port =22
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]## Usually it should be static IP, since it cost.. we are using the default one.
+    security_group_id = module.bastion_sg.sg_id  
+}
+
+## Creating VPN SSH
+resource "aws_security_group_rule" "vpn_ssh" {
+    type = "ingress"
+    from_port = 22
+    to_port =22
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]## Usually it should be static IP, since it cost.. we are using the default one.
+    security_group_id = module.vpn_sg.sg_id  
+}
+
+## Creating VPN 443
+resource "aws_security_group_rule" "vpn_443" {
+    type = "ingress"
+    from_port = 443
+    to_port =443
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]## Usually it should be static IP, since it cost.. we are using the default one.
+    security_group_id = module.vpn_sg.sg_id  
+}
+
+## Creating VPN 1194
+resource "aws_security_group_rule" "vpn_1194" {
+    type = "ingress"
+    from_port = 1194
+    to_port =1194
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]## Usually it should be static IP, since it cost.. we are using the default one.
+    security_group_id = module.vpn_sg.sg_id  
+}
+
+## Creating VPN 943
+resource "aws_security_group_rule" "vpn_943" {
+    type = "ingress"
+    from_port = 943
+    to_port =943
+    protocol = "tcp"
+    cidr_blocks = ["0.0.0.0/0"]## Usually it should be static IP, since it cost.. we are using the default one.
+    security_group_id = module.vpn_sg.sg_id  
+}
+
+## Application load balancer accepting traffic VPN from port#80
+resource "aws_security_group_rule" "app_alb_vpn" {
+    type = "ingress"
+    from_port = 80
+    to_port =80
+    protocol = "tcp"
+    source_security_group_id = module.vpn_sg.sg_id
+    ##Mistake-- security_group_id = module.vpn_sg.sg_id  
+    security_group_id = module.app_alb_sg.sg_id  
+}
+
+## Receiving traffic from bastion to connect to sql server
+resource "aws_security_group_rule" "mysql_bastion" {
+    type = "ingress"
+    from_port = 3306
+    to_port =3306
+    protocol = "tcp"
+    source_security_group_id = module.bastion_sg.sg_id
+    security_group_id = module.mysql_sg.sg_id  
+}
+
+## Receiving traffic from VPN to connect to sql server
+resource "aws_security_group_rule" "mysql_vpn" {
+    type = "ingress"
+    from_port = 3306
+    to_port =3306
+    protocol = "tcp"
+    source_security_group_id = module.vpn_sg.sg_id
+    security_group_id = module.mysql_sg.sg_id  
+}
+
+## Receiving traffic from VPN to connect to sql server
+resource "aws_security_group_rule" "backend_vpn" {
+    type = "ingress"
+    from_port = 22
+    to_port =22     
+    protocol = "tcp"
+    source_security_group_id = module.vpn_sg.sg_id
+    security_group_id = module.backend_sg.sg_id  
+}
+
+## Receiving traffic from VPN to connect to sql server
+resource "aws_security_group_rule" "backend_vpn_http" {
+    type = "ingress"
+    from_port = 8080
+    to_port =8080     
+    protocol = "tcp"
+    source_security_group_id = module.app_alb_sg.sg_id
+    security_group_id = module.backend_sg.sg_id  
+}
+
+
+
+
